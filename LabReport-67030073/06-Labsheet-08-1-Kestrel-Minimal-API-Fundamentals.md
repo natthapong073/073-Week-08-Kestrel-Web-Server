@@ -62,7 +62,12 @@
 
 1. ในหน้าจอ Terminal ขณะที่เซิร์ฟเวอร์กำลังรันอยู่ ให้กดปุ่ม `Ctrl + C` เพื่อหยุดโปรแกรม
 2. กลับไปที่หน้าเบราว์เซอร์แล้วกดปุ่ม **Refresh (F5)** สังเกตว่าเกิดอะไรขึ้น และอธิบายสั้นๆ ว่าทำไมจึงเป็นเช่นนั้น
-   - **คำตอบ** ....................................................................................................
+   - **คำตอบ:** เบราว์เซอร์แสดงหน้า Error "This site can't be reached / ERR_CONNECTION_REFUSED" (ทดสอบด้วย `curl` ได้ `curl: (7) Failed to connect to localhost port 5080 ... Couldn't connect to server` ) เพราะ Kestrel ไม่ได้เป็น Service แยกที่รันค้างอยู่ในระบบแบบ Apache/IIS แต่ฝังตัวอยู่ในโปรเซสของโปรแกรมเราเอง เมื่อกด `Ctrl + C` โปรเซสจบการทำงาน Socket ที่ Listen พอร์ต 5080 ก็ถูกปิดไปด้วย จึงไม่มีใครรับ TCP Connection อีกต่อไป (OS ตอบกลับด้วย TCP RST)
+
+### ผลการรันโปรแกรมบน Web Browser
+เมื่อเข้าถึง URL `http://localhost:5135` หน้าเว็บจะแสดงข้อความว่า **"Welcome to IoT Edge Gateway by Natthapong Niampradit!"** ดังภาพ:
+
+![IoT Edge Gateway Result](./Images/ใส่ชื่อไฟล์รูปภาพของคุณ.png)
 
 ---
 
@@ -84,6 +89,8 @@
    ```
 
 3. บันทึกไฟล์ สั่ง `dotnet run` อีกครั้ง แล้วกด Refresh บนเบราว์เซอร์เพื่อดูผลลัพธ์
+   <img width="1919" height="642" alt="image" src="https://github.com/user-attachments/assets/0cb7bb95-22ee-4016-a277-1d9fda19ed9c" />
+
 
 ---
 
@@ -112,7 +119,10 @@
      "uptimeSeconds": 25,
      "isHealthy": true
    }
+   
    ```
+   <img width="1919" height="340" alt="image" src="https://github.com/user-attachments/assets/dbf89e57-3797-4177-8e69-db8a3313e734" />
+
 
 > เราไม่ได้สั่ง `json_encode()` หรือแปลงสตริงเลย เพียงแค่เราส่ง C# Anonymous Object ออกมา Kestrel จะทำการ Serialize เป็น JSON และแปะ Header `Content-Type: application/json` ให้อัตโนมัติ!
 
@@ -158,6 +168,13 @@
 [xx:xx:xx] LED Control: on
 [xx:xx:xx] LED Control: off
 ```
+| URL | `actionResult` ที่ได้ | Log บน Terminal |
+| :--- | :--- | :--- |
+| `/api/led/on` | `TURN ON 💡` | `[09:50:16] LED Control: on` |
+| `/api/led/off` | `TURN OFF 🌑` | `[09:51:36] LED Control: off` |
+| `/api/led/blink` | `TURN OFF 🌑` | `[09:52:00] LED Control: blink` |
+<img width="1919" height="509" alt="image" src="https://github.com/user-attachments/assets/5808bf53-c963-4817-903a-01c0e2153dcf" />
+<img width="1919" height="410" alt="image" src="https://github.com/user-attachments/assets/6cf0eecf-958c-40fa-82fa-7e6961cbc76f" />
 
 
 ---
@@ -175,10 +192,32 @@
    - `timestamp`= เวลาปัจจุบันของเซิร์ฟเวอร์ (`DateTime.Now.ToString(...)`)
 
  **หลักฐานการส่งงาน** บันทึกภาพหน้าจอเบราว์เซอร์ที่เปิดแสดงผล JSON จาก `/api/student` พร้อมโค้ดใน VS Code ลงในรายงานผลการทดลอง
+1. เพิ่ม Endpoint ต่อไปนี้ลงใน `Program.cs`
+   
+    app.MapGet("/api/led/{state}", (string state) => {
+    string action = state.ToLower() == "on" ? "TURN ON 💡" : "TURN OFF 🌑";
+    
+    Console.WriteLine($"[{DateTime.Now:HH:mm:ss}] LED Control: {state}");
+    
+    return Results.Ok(new { 
+        device = "LED_D2", 
+        requestedState = state, 
+        actionResult = action,
+        serverTime = DateTime.Now.ToString("HH:mm:ss")
+    });
+});
+ <img width="1919" height="271" alt="image" src="https://github.com/user-attachments/assets/3b2beea9-f272-4cdd-b061-659b7a01ffbf" />
+
 
 ---
 
 ## คำถามท้ายการทดลอง (Review Questions)
 1. ในสถาปัตยกรรมของ Kestrel ตัวแปร `builder` ทำหน้าที่อะไร และตัวแปร `app` ทำหน้าที่อะไร
+   * **ตัวแปร `builder` (`WebApplicationBuilder`):** ทำหน้าที่เตรียมความพร้อมและตั้งค่าสภาพแวดล้อม (Configuration) ก่อนสร้างแอปพลิเคชัน เช่น การตั้งค่าพอร์ต, การลงทะเบียน Services ต่างๆ (Dependency Injection), และการตั้งค่า Logging เปรียบเสมือนการเตรียมวัสดุและเครื่องมือก่อนประกอบร่างเซิร์ฟเวอร์
+   * **ตัวแปร `app` (`WebApplication`):** ทำหน้าที่จัดการแอปพลิเคชันที่สร้างเสร็จแล้ว โดยใช้สำหรับกำหนดเส้นทาง (Routing) เช่นคำสั่ง `app.MapGet(...)` เพื่อกำหนดว่า Path ใดจะทำงานด้วยฟังก์ชันอะไร รวมถึงใช้กำหนด HTTP Request Pipeline และใช้คำสั่ง `app.Run()` เพื่อสั่งให้ Kestrel เริ่มรับการเชื่อมต่อจากภายนอก
 2. เปรียบเทียบความสะดวกระหว่างการสร้าง Web Server บน .NET Minimal API กับการรันผ่าน LAMP Stack (Apache + PHP) ว่ามีข้อดีข้อเสียต่างกันอย่างไรในมุมมองของงาน IoT Gateway
+   * **.NET Minimal API:**
+   * **ข้อดี:** กินทรัพยากรน้อย (Lightweight) เริ่มต้นทำงานรวดเร็ว และมี Web Server (Kestrel) ฝังมาในตัว (Self-contained) ทำให้ไม่ต้องติดตั้ง Service ซอฟต์แวร์แยก โค้ดมีความกระชับ เหมาะมากกับการนำไปรันบนอุปกรณ์ IoT Gateway หรือ Edge Device ที่มีทรัพยากรจำกัด
 3. นักศึกษาคิดว่าการเพิ่ม `/api/` เข้าไปใน route นั้นมีประโยชน์อย่างไรบ้าง ถ้าไม่ใส่จะเกิดปัญหาอะไรบ้าง
+   * **ประโยชน์:** ช่วยแบ่งแยกจุดประสงค์การใช้งานอย่างชัดเจน (Separation of Concerns) ทำให้ระบบทราบว่า Path นี้ถูกออกแบบมาเพื่อให้บริการข้อมูลดิบ (Data Service) แบบ Machine-to-Machine (เช่น คืนค่าเป็น JSON) ไม่ใช่เพื่อแสดงผลเป็นหน้าเว็บเพจ (HTML) ให้คนดู
+   * **ปัญหาถ้าไม่ใส่:** อาจเกิดปัญหาเส้นทางทับซ้อนกัน (Route Collision) ในอนาคต เช่น หากเราใช้เส้นทาง `/student` ในการส่งค่า JSON กลับไป แล้ววันหนึ่งเราต้องการสร้างหน้าเว็บไซต์แสดงโปรไฟล์นักศึกษาที่ URL `/student` เส้นทางทั้งสองจะชนกัน การมี `/api/student` จึงช่วยแยกพื้นที่ของ API ออกจากพื้นที่ของ Web UI อย่างเป็นระบบตามหลัก RESTful API  
